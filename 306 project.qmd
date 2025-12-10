@@ -1,0 +1,314 @@
+
+```{r}
+library(shiny)
+library(tidyverse)
+library(scales)
+
+# LOAD & CLEAN DATA
+
+files <- list.files(pattern = "ACSST1Y\\d{4}\\.S1701.*\\.csv$")
+
+read_with_year <- function(f) {
+  year <- str_extract(f, "(?<=ACSST1Y)\\d{4}")
+  df <- read_csv(f, col_types = cols(.default = "c"), show_col_types = FALSE)
+  df$year <- as.integer(year)
+  df
+}
+
+all_data <- files |> lapply(read_with_year) |> bind_rows()
+
+clean_data <- all_data |> 
+  rename(
+    group = `Label (Grouping)`,
+    totalpop = `Michigan!!Total!!Estimate`,
+    belowpoverty_pop = `Michigan!!Below poverty level!!Estimate`,
+    poverty_rate = `Michigan!!Percent below poverty level!!Estimate`
+  ) |> 
+  mutate(
+    group_clean = str_to_upper(str_trim(group)),
+    poverty_rate = as.numeric(sub("%","",poverty_rate)) / 100
+  )
+
+clean_data <- clean_data |>
+  mutate(
+    section = case_when(
+      group_clean %in% c("SEX","AGE","RACE AND HISPANIC OR LATINO ORIGIN",
+                         "EDUCATIONAL ATTAINMENT","EMPLOYMENT STATUS",
+                         "WORK EXPERIENCE") ~ group_clean,
+      TRUE ~ NA_character_
+    )
+  ) |>
+  fill(section)
+
+clean_data <- clean_data |>
+  mutate(
+    section_clean = str_to_upper(str_replace_all(str_trim(section), "\u00A0", ""))
+  )
+
+# GENDER
+
+df_gender <- clean_data %>%
+  filter(section_clean == "SEX" & group_clean %in% c("MALE", "FEMALE")) %>%
+  mutate(
+    group = str_to_title(group_clean),     # "Male"/"Female"
+    poverty_rate = as.numeric(poverty_rate)
+  ) %>%
+  arrange(year)
+
+
+# RACE
+
+df_race <- clean_data %>%
+  filter(str_detect(section_clean, "RACE")) %>%
+  mutate(
+    group_clean = str_to_upper(str_squish(group_clean)),
+    race_combined = case_when(
+      group_clean == "WHITE ALONE, NOT HISPANIC OR LATINO" ~ "White",
+      group_clean == "WHITE ALONE" ~ "White",
+      str_detect(group_clean, "BLACK") ~ "Black",
+      str_detect(group_clean, "AMERICAN INDIAN") ~ "American Indian / Alaska Native",
+      str_detect(group_clean, "ASIAN") ~ "Asian",
+      str_detect(group_clean, "NATIVE HAWAIIAN") ~ "NH/PI",
+      str_detect(group_clean, "SOME OTHER RACE") ~ "Some other race",
+      str_detect(group_clean, "TWO OR MORE") ~ "Two or more races",
+      str_detect(group_clean, "HISPANIC OR LATINO ORIGIN") ~ "Hispanic (any race)",
+      group_clean == "RACE AND HISPANIC OR LATINO ORIGIN" ~ "Hispanic (any race)",
+      TRUE ~ NA_character_
+    )
+  ) %>%
+  filter(!is.na(race_combined)) %>%
+  group_by(year, race_combined) %>%
+  summarise(poverty_rate_num = mean(poverty_rate, na.rm = TRUE), .groups = "drop")
+
+race_choices <- sort(unique(df_race$race_combined))
+
+
+# EDUCATION
+
+df_education <- clean_data %>%
+  filter(str_detect(section_clean, "EDUCATIONAL ATTAINMENT")) %>%
+  mutate(
+    group_clean = str_to_upper(str_squish(group_clean)),
+    edu_combined = case_when(
+      str_detect(group_clean, "LESS THAN HIGH SCHOOL") ~ "Less than high school graduate",
+      str_detect(group_clean, "HIGH SCHOOL GRADUATE") ~ "High school graduate (includes equivalency)",
+      str_detect(group_clean, "SOME COLLEGE") ~ "Some college, associate's degree",
+      str_detect(group_clean, "BACHELOR") ~ "Bachelor's degree or higher",
+      TRUE ~ NA_character_
+    )
+  ) %>%
+  filter(!is.na(edu_combined)) %>%
+  group_by(year, edu_combined) %>%
+  summarise(
+    poverty_rate_num = mean(poverty_rate, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+year_choices <- sort(unique(clean_data$year))
+
+
+# UI
+
+ui <- fluidPage(
+  titlePanel("Michigan Poverty Explorer"),
+
+  sidebarLayout(
+    sidebarPanel(
+      h4("Controls"),
+
+      # Year selector: only for gender + education tabs
+      conditionalPanel(
+        condition = "input.tabs == 'gender' || input.tabs == 'education'",
+        selectInput("year_select", "Select Year:", choices = year_choices)
+      ),
+
+      # Race selectors: only for race tab
+      conditionalPanel(
+        condition = "input.tabs == 'race'",
+        selectInput("race_selectA", "Select Race1:",
+                    choices = race_choices,
+                    selected = "White"),
+        selectInput("race_select", "Select Race2:",
+                    choices = race_choices,
+                    selected = "Black")
+      ),
+
+      br(),
+      helpText("Model: Percent Below Poverty_Rate = β0 + β1·year + group_indicator + ε")
+    ),
+
+    mainPanel(
+      tabsetPanel(
+        id = "tabs",
+
+        tabPanel(
+          "Overview",
+          value = "overview",
+          h2("What Is Poverty?"),
+          p("According to the US Census Bureau, poverty is when 'a family's total income is less than the family's threshold, meaning that family and every individual in it is considered in poverty.' When a family or an individual are in socioeconomic condition where they can't achieve minimum standard of living due to various basic factors, such as financial or nonfinancial resources, they can be considered to be living in poverty'"),
+          p("This app will explore how poverty rates in Michigan vary across 
+         gender, race, and education level over time according to the US Census Data, helping us understand 
+         demographic disparities and long-term economic trends to observe the percent below poverty level amongst the groups.")
+        ),
+
+        tabPanel(
+          "By Gender",
+          value = "gender",
+          h4("Linear Trend (2010–2024)"),
+          verbatimTextOutput("gender_reg"),
+          br(),
+          plotOutput("gender_plot")
+        ),
+
+        tabPanel(
+          "By Race",
+          value = "race",
+          h4("Linear Trends for Selected Races"),
+          verbatimTextOutput("race_reg"),
+          br(),
+          plotOutput("race_plot")
+        ),
+
+        tabPanel(
+          "By Education",
+          value = "education",
+          h4("Linear Trend (2010–2024)"),
+          verbatimTextOutput("education_reg"),
+          br(),
+          plotOutput("education_plot")
+        )
+      )
+    )
+  )
+)
+
+
+# SERVER
+
+server <- function(input, output, session) {
+
+  # GENDER PLOT
+  output$gender_plot <- renderPlot({
+    req(input$year_select)
+
+    df_year <- df_gender %>% filter(year == input$year_select)
+
+    ggplot(df_year, aes(x = group, y = poverty_rate, fill = group)) +
+      geom_bar(stat = "identity") +
+      scale_y_continuous(labels = percent_format()) +
+      scale_fill_discrete(name = "Gender") +
+      labs(
+        title = paste("Percent Below Poverty Rate by Gender in", input$year_select),
+        x = "Gender",
+        y = "Percent Below Poverty Rate"
+      ) +
+      theme_minimal(base_size = 14)
+  })
+
+  # GENDER REGRESSION TEXT
+
+  output$gender_reg <- renderPrint({
+    genders <- sort(unique(df_gender$group))
+    lines <- lapply(genders, function(g) {
+      dat <- df_gender[df_gender$group == g, ]
+      fit <- lm(poverty_rate ~ year, data = dat)
+      s   <- summary(fit)
+      intercept <- coef(fit)[1]
+      slope     <- coef(fit)[2]
+      se_slope  <- s$coef[2, 2]
+      sprintf(
+        "%s: poverty_rate = %.4f + %.4f * year   (SE of slope = %.4f)",
+        g, intercept, slope, se_slope
+      )
+    })
+    cat(paste(lines, collapse = "\n"))
+  })
+
+  # RACE PLOT
+  output$race_plot <- renderPlot({
+    raceA <- input$race_selectA
+    raceB <- input$race_select
+
+    df_two <- df_race %>%
+      filter(race_combined %in% c(raceA, raceB))
+
+    ggplot(df_two, aes(x = year,
+                       y = poverty_rate_num,
+                       color = race_combined,
+                       group = race_combined)) +
+      geom_line(size = 1.4) +
+      geom_point(size = 3) +
+      scale_y_continuous(labels = percent_format()) +
+      labs(
+        title = paste("Percent Below Poverty Rate Between:", raceA, "vs", raceB),
+        x = "Year",
+        y = "Percent Below Poverty Rate",
+        color = "Race"
+      ) +
+      theme_minimal(base_size = 14)
+  })
+
+  # RACE REGRESSION TEXT 
+  output$race_reg <- renderPrint({
+    raceA <- input$race_selectA
+    raceB <- input$race_select
+    chosen <- unique(c(raceA, raceB))
+
+    lines <- lapply(chosen, function(r) {
+      dat <- df_race[df_race$race_combined == r, ]
+      fit <- lm(poverty_rate_num ~ year, data = dat)
+      s   <- summary(fit)
+      intercept <- coef(fit)[1]
+      slope     <- coef(fit)[2]
+      se_slope  <- s$coef[2, 2]
+      sprintf(
+        "%s: poverty_rate = %.4f + %.4f * year   (SE of slope = %.4f)",
+        r, intercept, slope, se_slope
+      )
+    })
+    cat(paste(lines, collapse = "\n"))
+  })
+
+  # EDUCATION PLOT 
+  output$education_plot <- renderPlot({
+    req(input$year_select)
+
+    df_yearEdu <- df_education %>% filter(year == input$year_select)
+
+    ggplot(df_yearEdu,
+           aes(x = poverty_rate_num,
+               y = edu_combined,
+               fill = edu_combined)) +
+      geom_bar(stat = "identity") +
+      scale_x_continuous(labels = percent_format()) +
+      scale_fill_discrete(name = "Education Level") +
+      labs(
+        title = paste("Percent Below Poverty Rate by Education in", input$year_select),
+        x = "Percent Below Poverty Rate",
+        y = "Education Level"
+      ) +
+      theme_minimal(base_size = 14)
+  })
+
+  # EDUCATION REGRESSION TEXT 
+  output$education_reg <- renderPrint({
+    edus <- sort(unique(df_education$edu_combined))
+    lines <- lapply(edus, function(e) {
+      dat <- df_education[df_education$edu_combined == e, ]
+      fit <- lm(poverty_rate_num ~ year, data = dat)
+      s   <- summary(fit)
+      intercept <- coef(fit)[1]
+      slope     <- coef(fit)[2]
+      se_slope  <- s$coef[2, 2]
+      sprintf(
+        "%s: poverty_rate = %.4f + %.4f * year   (SE of slope = %.4f)",
+        e, intercept, slope, se_slope
+      )
+    })
+    cat(paste(lines, collapse = "\n"))
+  })
+}
+
+shinyApp(ui, server)
+
+```
