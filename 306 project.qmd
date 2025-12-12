@@ -1,6 +1,10 @@
 
-```{r}
+
+``` {r}
+
 library(shiny)
+library(dplyr)
+library(ggplot2)
 library(tidyverse)
 library(scales)
 
@@ -68,7 +72,6 @@ df_race <- clean_data %>%
       str_detect(group_clean, "BLACK") ~ "Black",
       str_detect(group_clean, "AMERICAN INDIAN") ~ "American Indian / Alaska Native",
       str_detect(group_clean, "ASIAN") ~ "Asian",
-      str_detect(group_clean, "NATIVE HAWAIIAN") ~ "NH/PI",
       str_detect(group_clean, "SOME OTHER RACE") ~ "Some other race",
       str_detect(group_clean, "TWO OR MORE") ~ "Two or more races",
       str_detect(group_clean, "HISPANIC OR LATINO ORIGIN") ~ "Hispanic (any race)",
@@ -111,17 +114,17 @@ year_choices <- sort(unique(clean_data$year))
 
 ui <- fluidPage(
   titlePanel("Michigan Poverty Explorer"),
-
+  
   sidebarLayout(
     sidebarPanel(
       h4("Controls"),
-
+      
       # Year selector: only for gender + education tabs
       conditionalPanel(
         condition = "input.tabs == 'gender' || input.tabs == 'education'",
         selectInput("year_select", "Select Year:", choices = year_choices)
       ),
-
+      
       # Race selectors: only for race tab
       conditionalPanel(
         condition = "input.tabs == 'race'",
@@ -132,15 +135,15 @@ ui <- fluidPage(
                     choices = race_choices,
                     selected = "Black")
       ),
-
+      
       br(),
       helpText("Model: Percent Below Poverty_Rate = β0 + β1·year + group_indicator + ε")
     ),
-
+    
     mainPanel(
       tabsetPanel(
         id = "tabs",
-
+        
         tabPanel(
           "Overview",
           value = "overview",
@@ -150,7 +153,7 @@ ui <- fluidPage(
          gender, race, and education level over time according to the US Census Data, helping us understand 
          demographic disparities and long-term economic trends to observe the percent below poverty level amongst the groups.")
         ),
-
+        
         tabPanel(
           "By Gender",
           value = "gender",
@@ -159,7 +162,7 @@ ui <- fluidPage(
           br(),
           plotOutput("gender_plot")
         ),
-
+        
         tabPanel(
           "By Race",
           value = "race",
@@ -168,7 +171,7 @@ ui <- fluidPage(
           br(),
           plotOutput("race_plot")
         ),
-
+        
         tabPanel(
           "By Education",
           value = "education",
@@ -186,13 +189,13 @@ ui <- fluidPage(
 # SERVER
 
 server <- function(input, output, session) {
-
+  
   # GENDER PLOT
   output$gender_plot <- renderPlot({
     req(input$year_select)
-
+    
     df_year <- df_gender %>% filter(year == input$year_select)
-
+    
     ggplot(df_year, aes(x = group, y = poverty_rate, fill = group)) +
       geom_bar(stat = "identity") +
       scale_y_continuous(labels = percent_format()) +
@@ -204,9 +207,9 @@ server <- function(input, output, session) {
       ) +
       theme_minimal(base_size = 14)
   })
-
+  
   # GENDER REGRESSION TEXT
-
+  
   output$gender_reg <- renderPrint({
     genders <- sort(unique(df_gender$group))
     lines <- lapply(genders, function(g) {
@@ -223,15 +226,15 @@ server <- function(input, output, session) {
     })
     cat(paste(lines, collapse = "\n"))
   })
-
+  
   # RACE PLOT
   output$race_plot <- renderPlot({
     raceA <- input$race_selectA
     raceB <- input$race_select
-
+    
     df_two <- df_race %>%
       filter(race_combined %in% c(raceA, raceB))
-
+    
     ggplot(df_two, aes(x = year,
                        y = poverty_rate_num,
                        color = race_combined,
@@ -247,13 +250,13 @@ server <- function(input, output, session) {
       ) +
       theme_minimal(base_size = 14)
   })
-
+  
   # RACE REGRESSION TEXT 
   output$race_reg <- renderPrint({
     raceA <- input$race_selectA
     raceB <- input$race_select
     chosen <- unique(c(raceA, raceB))
-
+    
     lines <- lapply(chosen, function(r) {
       dat <- df_race[df_race$race_combined == r, ]
       fit <- lm(poverty_rate_num ~ year, data = dat)
@@ -268,13 +271,13 @@ server <- function(input, output, session) {
     })
     cat(paste(lines, collapse = "\n"))
   })
-
+  
   # EDUCATION PLOT 
   output$education_plot <- renderPlot({
     req(input$year_select)
-
+    
     df_yearEdu <- df_education %>% filter(year == input$year_select)
-
+    
     ggplot(df_yearEdu,
            aes(x = poverty_rate_num,
                y = edu_combined,
@@ -289,7 +292,7 @@ server <- function(input, output, session) {
       ) +
       theme_minimal(base_size = 14)
   })
-
+  
   # EDUCATION REGRESSION TEXT 
   output$education_reg <- renderPrint({
     edus <- sort(unique(df_education$edu_combined))
@@ -310,5 +313,4 @@ server <- function(input, output, session) {
 }
 
 shinyApp(ui, server)
-
 ```
