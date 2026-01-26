@@ -113,7 +113,7 @@ year_choices <- sort(unique(clean_data$year))
 # UI
 
 ui <- fluidPage(
-  titlePanel("Michigan Poverty Explorer"),
+  titlePanel("Michigan Poverty Rate Explorer"),
   
   sidebarLayout(
     sidebarPanel(
@@ -148,10 +148,9 @@ ui <- fluidPage(
           "Overview",
           value = "overview",
           h2("What Is Poverty?"),
-          p("According to the US Census Bureau, poverty is when 'a family's total income is less than the family's threshold, meaning that family and every individual in it is considered in poverty.' When a family or an individual are in socioeconomic condition where they can't achieve minimum standard of living due to various basic factors, such as financial or nonfinancial resources, they can be considered to be living in poverty'"),
-          p("This app will explore how poverty rates in Michigan vary across 
-         gender, race, and education level over time according to the US Census Data, helping us understand 
-         demographic disparities and long-term economic trends to observe the percent below poverty level amongst the groups.")
+          p("According to the US Census Bureau, poverty is defined as when 'a family's total income is less than the family's threshold, meaning that family and every individual in it is considered in poverty.' More broadly, poverty reflects circumstances in which people lack the financial and social resources necessary to achieve a basic standard of living, shaped by both economic and structural factors."),
+          p("This project uses R Shiny, along with packages such as dplyr, ggplot2, and tidyverse, to explore poverty trends in Michigan over time. Using US Census data, the app allows users to examine how poverty rates vary across gender, race, and education level, revealing structural disparities and long-term economic trends. Interactive visualizations (bar charts, line graphs, and dynamic filters) allow users to investigate these patterns themselves, while regression outputs provide statistical context for observed trends. By visualizing these differences, we aim to uncover the structural and demographic forces that contribute to inequity, how data visualization can illuminate social inequities and support evidence-based decision-making across diverse populations, and to provide insights that can inform more equitable policy and community interventions."),
+          p("This project was developed by Jason Park, Michael Cui, and Lia Du as part of the F25 semester of DATASCI/STATS 306: Statistical Computing, taught by Jonathan Terhorst.")
         ),
         
         tabPanel(
