@@ -1,8 +1,8 @@
-# Welcome to our DS 306 Project
+# Welcome to our DS 306 Project!
 
 ### How to run:
 
-Download the code + csvs and put them into one folder. *MAKE SURE YOU HAVE ALL THE FILES WITHIN ONE FOLDER AND ONE FOLDER ONLY. There cannot be a folder within a folder and such — one folder and one folder only.*
+Download the code + CSV and put them into one folder. *Make sure you have all the files in a single folder only.*
 
 You can run the file in R Studio, it is all one chunk so there should be no issue. There should only be one Quarto Markdown file titled "306project.qmd".
 
