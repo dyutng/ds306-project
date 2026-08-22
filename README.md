@@ -1,5 +1,8 @@
 # Welcome to our DS 306 Project!
 
+<img width="2534" height="1580" alt="Screen Recording 2026-08-22 at 1 39 42 AM" src="https://github.com/user-attachments/assets/28574e20-a91c-4bf4-a61e-1d0acd48ebfd" />
+
+
 ### How to run
 Download the .qmd file + CSV and place them into one folder. *Make sure you have all the files in a single folder only.*
 
